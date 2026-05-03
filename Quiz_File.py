@@ -76,14 +76,20 @@ def play_sound(sound_type):
 # --- 3. DATA LOADING ---
 @st.cache_data(show_spinner="Updating Quiz Data...")
 def load_data():
-    base_dir = r"C:\Users\piyush.sharma4\Desktop\test\Quiz_file"
-    file_path = os.path.join(base_dir, "Questions1.xlsx")
+    # This tells the app to look inside the folder you uploaded to GitHub
+    file_path = os.path.join("Quiz_file", "Questions1.xlsx")
+    
     try:
+        # Load using openpyxl engine
         df = pd.read_excel(file_path, engine='openpyxl')
-        df.columns = [c.strip() for c in df.columns]
+        # Clean column names to prevent errors
+        df.columns = [str(c).strip() for c in df.columns]
         return df.dropna(subset=['Question'])
+    except FileNotFoundError:
+        st.error(f"❌ File not found! Ensure the 'Quiz_file' folder and 'Questions1.xlsx' are in your GitHub repo.")
+        return pd.DataFrame()
     except Exception as e:
-        st.error(f"Error loading file: {e}")
+        st.error(f"❌ Error loading file: {e}")
         return pd.DataFrame()
 
 
