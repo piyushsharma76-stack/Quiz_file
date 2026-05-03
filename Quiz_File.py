@@ -30,7 +30,6 @@ st.markdown("""
         border: 2px solid #3E4A6A;
     }
 
-    /* Feedback and Explanation Styles */
     .feedback-text { font-size: 32px; font-weight: bold; text-align: center; margin-top: 25px; }
     .ans-box { 
         background-color: #26355d; 
@@ -64,18 +63,15 @@ def play_sound(sound_type):
 # --- 3. DATA LOADING ---
 @st.cache_data(show_spinner="Updating Quiz Data...")
 def load_data():
-    # We change this to look for the file directly in the main folder
-    file_path = "Questions1.xlsx" 
-    
+    # Use relative path for GitHub deployment
+    file_path = "Questions1.xlsx"
     try:
         df = pd.read_excel(file_path, engine='openpyxl')
+        # Standardize columns and remove duplicates
         df.columns = [str(c).strip() for c in df.columns]
-        return df.dropna(subset=['Question'])
-    except FileNotFoundError:
-        st.error(f"❌ Still can't find {file_path} on GitHub!")
-        return pd.DataFrame()
+        return df.drop_duplicates(subset=['Question']).dropna(subset=['Question'])
     except Exception as e:
-        st.error(f"❌ Error: {e}")
+        st.error(f"Error loading file. Details: {e}")
         return pd.DataFrame()
 
 
@@ -120,7 +116,7 @@ if state_key not in st.session_state:
 
 qs = st.session_state[state_key]
 
-# --- 7. 15s TIMER ---
+# --- 7. TIMER LOGIC (15s per question) ---
 if not qs['quiz_over'] and not qs['answered']:
     elapsed = time.time() - qs['start_time']
     time_left = max(0, int(15 - elapsed))
@@ -173,48 +169,38 @@ if not qs['quiz_over'] and qs['current_idx'] < TOTAL_Q:
                 if st.button(f"B. {q_data['Option2']}", key=f"B_{qs['current_idx']}"): select_answer(q_data['Option2'])
                 if st.button(f"D. {q_data['Option4']}", key=f"D_{qs['current_idx']}"): select_answer(q_data['Option4'])
 
-        time.sleep(1)
-        st.rerun()
-
     else:
+        # --- FEEDBACK PHASE (10 Seconds) ---
         with main_placeholder.container():
-            # Feedback Message (Correct/Incorrect)
+            st.markdown(f"<h2 style='text-align: center; line-height: 1.5; color: white;'>{q_data['Question']}</h2>",
+                        unsafe_allow_html=True)
+
             feedback_color = "#00FF00" if qs['feedback_type'] == "success" else "#FF4B4B"
             st.markdown(f"<div class='feedback-text' style='color:{feedback_color};'>{qs['feedback_msg']}</div>",
                         unsafe_allow_html=True)
 
-            # Correct Answer Display (White text in a stylized box)
-            st.markdown(f"""
-                <div class='ans-box'>
-                    <b>Correct Answer:</b> {q_data['Correct Answer']}
-                </div>
-            """, unsafe_allow_html=True)
+            st.markdown(f"<div class='ans-box'><b>Correct Answer:</b> {q_data['Correct Answer']}</div>",
+                        unsafe_allow_html=True)
 
-            # Explanation Display (Light gray text in a subtle box)
             expl = q_data.get('Explaination of Correct Answer', 'N/A')
-            st.markdown(f"""
-                <div class='expl-box'>
-                    <b>Explanation:</b> {expl}
-                </div>
-            """, unsafe_allow_html=True)
-
-            st.write("---")
+            st.markdown(f"<div class='expl-box'><b>Explanation:</b> {expl}</div>", unsafe_allow_html=True)
 
             countdown_placeholder = st.empty()
-            for i in range(9, 0, -1):
+            for i in range(10, 0, -1):
                 countdown_placeholder.markdown(f"<p class='countdown-text'>Next question in {i} seconds...</p>",
                                                unsafe_allow_html=True)
                 time.sleep(1)
 
-            # Resetting states before advancing
+            # --- RESET FOR NEXT QUESTION ---
             main_placeholder.empty()
             qs['answered'] = False
             qs['current_idx'] += 1
             qs['start_time'] = time.time()
+            qs['feedback_msg'] = ""
+            qs['feedback_type'] = ""
 
             if qs['current_idx'] >= TOTAL_Q:
                 qs['quiz_over'] = True
-
             st.rerun()
 
 else:
