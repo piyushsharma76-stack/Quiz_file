@@ -77,7 +77,7 @@ def play_sound(sound_type):
 @st.cache_data(show_spinner="Updating Quiz Data...")
 def load_data():
     # This tells the app to look inside the folder you uploaded to GitHub
-    file_path = os.path.join("Quiz_file", "Questions1.xlsx")
+    file_path = "Questions1.xlsx"
     
     try:
         # Load using openpyxl engine
