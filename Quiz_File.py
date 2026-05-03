@@ -63,12 +63,11 @@ def play_sound(sound_type):
 # --- 3. DATA LOADING ---
 @st.cache_data(show_spinner="Updating Quiz Data...")
 def load_data():
-    # Use relative path for GitHub deployment
     file_path = "Questions1.xlsx"
     try:
         df = pd.read_excel(file_path, engine='openpyxl')
-        # Standardize columns and remove duplicates
         df.columns = [str(c).strip() for c in df.columns]
+        # Remove duplicates to ensure unique question sets
         return df.drop_duplicates(subset=['Question']).dropna(subset=['Question'])
     except Exception as e:
         st.error(f"Error loading file. Details: {e}")
@@ -116,10 +115,24 @@ if state_key not in st.session_state:
 
 qs = st.session_state[state_key]
 
-# --- 7. TIMER LOGIC (15s per question) ---
+# --- 7. UI HEADER & TIMER ---
+col1, col2, col3 = st.columns(3)
+with col1:
+    st.markdown(f"<div class='stat-box' style='color:#FFD700;'>🏆 Score: {qs['score']}</div>", unsafe_allow_html=True)
+with col2:
+    st.markdown(f"<div class='stat-box'>Q: {qs['current_idx'] + 1} / {TOTAL_Q}</div>", unsafe_allow_html=True)
+with col3:
+    timer_placeholder = st.empty()
+
+st.markdown("<br><br>", unsafe_allow_html=True)
+
+# --- 8. TIMER LOGIC (15s per question) ---
 if not qs['quiz_over'] and not qs['answered']:
     elapsed = time.time() - qs['start_time']
     time_left = max(0, int(15 - elapsed))
+    timer_placeholder.markdown(f"<div class='stat-box' style='color:#FF4B4B;'>⏳ {time_left}s</div>",
+                               unsafe_allow_html=True)
+
     if time_left <= 0:
         qs['answered'] = True
         qs['feedback_msg'] = "Time is Up! ⌛"
@@ -127,24 +140,17 @@ if not qs['quiz_over'] and not qs['answered']:
         play_sound("sorrow")
         st.rerun()
 else:
-    time_left = 0
-
-# --- 8. HEADER UI ---
-col1, col2, col3 = st.columns(3)
-with col1: st.markdown(f"<div class='stat-box' style='color:#FFD700;'>🏆 Score: {qs['score']}</div>",
-                       unsafe_allow_html=True)
-with col2: st.markdown(f"<div class='stat-box'>Q: {qs['current_idx'] + 1} / {TOTAL_Q}</div>", unsafe_allow_html=True)
-with col3: st.markdown(f"<div class='stat-box' style='color:#FF4B4B;'>⏳ {time_left}s</div>", unsafe_allow_html=True)
-
-st.markdown("<br><br>", unsafe_allow_html=True)
+    timer_placeholder.markdown(f"<div class='stat-box' style='color:#FF4B4B;'>⏳ 0s</div>", unsafe_allow_html=True)
 
 # --- 9. QUIZ LOGIC ---
 if not qs['quiz_over'] and qs['current_idx'] < TOTAL_Q:
     q_data = questions[qs['current_idx']]
-    main_placeholder = st.empty()
+
+    # Using a container to encapsulate the entire question/feedback area
+    quiz_container = st.empty()
 
     if not qs['answered']:
-        with main_placeholder.container():
+        with quiz_container.container():
             st.markdown(f"<h2 style='text-align: center; line-height: 1.5; color: white;'>{q_data['Question']}</h2>",
                         unsafe_allow_html=True)
             btn_cols = st.columns([1, 2, 2, 1])
@@ -169,16 +175,18 @@ if not qs['quiz_over'] and qs['current_idx'] < TOTAL_Q:
                 if st.button(f"B. {q_data['Option2']}", key=f"B_{qs['current_idx']}"): select_answer(q_data['Option2'])
                 if st.button(f"D. {q_data['Option4']}", key=f"D_{qs['current_idx']}"): select_answer(q_data['Option4'])
 
+        # Trigger frequent reruns to keep the timer ticking
+        time.sleep(1)
+        st.rerun()
+
     else:
         # --- FEEDBACK PHASE (10 Seconds) ---
-        with main_placeholder.container():
+        with quiz_container.container():
             st.markdown(f"<h2 style='text-align: center; line-height: 1.5; color: white;'>{q_data['Question']}</h2>",
                         unsafe_allow_html=True)
-
             feedback_color = "#00FF00" if qs['feedback_type'] == "success" else "#FF4B4B"
             st.markdown(f"<div class='feedback-text' style='color:{feedback_color};'>{qs['feedback_msg']}</div>",
                         unsafe_allow_html=True)
-
             st.markdown(f"<div class='ans-box'><b>Correct Answer:</b> {q_data['Correct Answer']}</div>",
                         unsafe_allow_html=True)
 
@@ -191,13 +199,14 @@ if not qs['quiz_over'] and qs['current_idx'] < TOTAL_Q:
                                                unsafe_allow_html=True)
                 time.sleep(1)
 
-            # --- RESET FOR NEXT QUESTION ---
-            main_placeholder.empty()
+            # CLEANUP AND ADVANCE
+            # We clear the container and reset ALL feedback-related states before rerunning
+            quiz_container.empty()
             qs['answered'] = False
-            qs['current_idx'] += 1
-            qs['start_time'] = time.time()
             qs['feedback_msg'] = ""
             qs['feedback_type'] = ""
+            qs['current_idx'] += 1
+            qs['start_time'] = time.time()
 
             if qs['current_idx'] >= TOTAL_Q:
                 qs['quiz_over'] = True
