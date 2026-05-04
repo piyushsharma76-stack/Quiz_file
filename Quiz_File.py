@@ -10,7 +10,6 @@ st.markdown("""
     <style>
     .block-container { padding-top: 5rem !important; }
     .stApp { background-color: #0F1937; color: #FFFFFF; }
-
     .stat-box { 
         font-size: 26px !important; 
         font-weight: bold; 
@@ -22,14 +21,12 @@ st.markdown("""
         box-shadow: 0px 4px 10px rgba(0,0,0,0.3);
         color: white;
     }
-
     .stButton>button {
         background-color: #1E2A4A; color: white; border-radius: 10px;
         height: 4em; width: 100%; font-size: 20px; font-weight: bold;
         margin-bottom: 12px;
         border: 2px solid #3E4A6A;
     }
-
     .feedback-text { font-size: 32px; font-weight: bold; text-align: center; margin-top: 25px; }
     .ans-box { 
         background-color: #26355d; 
@@ -67,16 +64,11 @@ def load_data():
     try:
         df = pd.read_excel(file_path, engine='openpyxl')
         df.columns = [str(c).strip() for c in df.columns]
-        # Remove duplicates to ensure unique question sets
         return df.drop_duplicates(subset=['Question']).dropna(subset=['Question'])
     except Exception as e:
-        st.error(f"Error loading file. Details: {e}")
+        st.error(f"Error loading file: {e}")
         return pd.DataFrame()
 
-
-if st.sidebar.button("🔄 Force Reload File"):
-    st.cache_data.clear()
-    st.rerun()
 
 df_all = load_data()
 
@@ -146,11 +138,15 @@ else:
 if not qs['quiz_over'] and qs['current_idx'] < TOTAL_Q:
     q_data = questions[qs['current_idx']]
 
-    # Using a container to encapsulate the entire question/feedback area
-    quiz_container = st.empty()
+    # We use separate placeholders to ensure we can wipe them individually
+    main_content = st.empty()
+    feedback_area = st.empty()
 
     if not qs['answered']:
-        with quiz_container.container():
+        # Ensure feedback area is empty when a new question starts
+        feedback_area.empty()
+
+        with main_content.container():
             st.markdown(f"<h2 style='text-align: center; line-height: 1.5; color: white;'>{q_data['Question']}</h2>",
                         unsafe_allow_html=True)
             btn_cols = st.columns([1, 2, 2, 1])
@@ -175,13 +171,13 @@ if not qs['quiz_over'] and qs['current_idx'] < TOTAL_Q:
                 if st.button(f"B. {q_data['Option2']}", key=f"B_{qs['current_idx']}"): select_answer(q_data['Option2'])
                 if st.button(f"D. {q_data['Option4']}", key=f"D_{qs['current_idx']}"): select_answer(q_data['Option4'])
 
-        # Trigger frequent reruns to keep the timer ticking
         time.sleep(1)
         st.rerun()
 
     else:
         # --- FEEDBACK PHASE (10 Seconds) ---
-        with quiz_container.container():
+        main_content.empty()  # Wipe the question buttons immediately
+        with feedback_area.container():
             st.markdown(f"<h2 style='text-align: center; line-height: 1.5; color: white;'>{q_data['Question']}</h2>",
                         unsafe_allow_html=True)
             feedback_color = "#00FF00" if qs['feedback_type'] == "success" else "#FF4B4B"
@@ -189,7 +185,6 @@ if not qs['quiz_over'] and qs['current_idx'] < TOTAL_Q:
                         unsafe_allow_html=True)
             st.markdown(f"<div class='ans-box'><b>Correct Answer:</b> {q_data['Correct Answer']}</div>",
                         unsafe_allow_html=True)
-
             expl = q_data.get('Explaination of Correct Answer', 'N/A')
             st.markdown(f"<div class='expl-box'><b>Explanation:</b> {expl}</div>", unsafe_allow_html=True)
 
@@ -199,9 +194,10 @@ if not qs['quiz_over'] and qs['current_idx'] < TOTAL_Q:
                                                unsafe_allow_html=True)
                 time.sleep(1)
 
-            # CLEANUP AND ADVANCE
-            # We clear the container and reset ALL feedback-related states before rerunning
-            quiz_container.empty()
+            # --- CRITICAL CLEANUP BEFORE ADVANCING ---
+            feedback_area.empty()
+            main_content.empty()
+
             qs['answered'] = False
             qs['feedback_msg'] = ""
             qs['feedback_type'] = ""
@@ -218,7 +214,6 @@ else:
                 unsafe_allow_html=True)
     st.markdown(f"<h2 style='text-align: center; color: #FFD700;'>Final Score: {qs['score']} / {TOTAL_Q}</h2>",
                 unsafe_allow_html=True)
-
     if st.button("Restart Quiz"):
         del st.session_state[state_key]
         st.rerun()
